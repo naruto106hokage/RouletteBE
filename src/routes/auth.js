@@ -5,10 +5,18 @@ const User = require('../models/User');
 const { body, validationResult } = require('express-validator');
 const twilio = require('twilio');
 
-const client = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
+let client;
+try {
+  if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+    client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  } else {
+    console.warn('Twilio credentials not found. SMS functionality will be disabled.');
+    client = null;
+  }
+} catch (error) {
+  console.error('Error initializing Twilio client:', error);
+  client = null;
+}
 
 // Generate OTP
 const generateOTP = () => {
@@ -81,15 +89,19 @@ router.post('/login',
       await user.save();
 
       // Send OTP via Twilio
-      try {
-        await client.messages.create({
-          body: `Your Roulette verification code is: ${otp}`,
-          to: '+' + phone_number,
-          from: process.env.TWILIO_PHONE_NUMBER
-        });
-      } catch (error) {
-        console.error('Twilio error:', error);
-        // For development, log OTP
+      if (client) {
+        try {
+          await client.messages.create({
+            body: `Your Roulette verification code is: ${otp}`,
+            to: '+' + phone_number,
+            from: process.env.TWILIO_PHONE_NUMBER
+          });
+        } catch (error) {
+          console.error('Twilio error:', error);
+          console.log('Development OTP:', otp);
+        }
+      } else {
+        // When Twilio is not configured, just log the OTP
         console.log('Development OTP:', otp);
       }
 
